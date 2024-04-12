@@ -5,7 +5,7 @@ produces a standard unit test result artifact as a JSON file.
 
 Python unittest documentation [unittest](https://docs.python.org/3/library/unittest.html)
 
-Includes support for HTTP API tests
+Includes support for HTTP API and SQL query tests
 
 ## Example: General Function
 test a simple addition function
@@ -200,7 +200,7 @@ summary results
 
 ## HTTP unit test
 
-use the `unittest_extensions.cases.HTTPTestCase` class to test endpoint with python requests
+use the `unittest_extensions.http.HTTPTestCase` class to test endpoint with python requests
 [python request documentation](https://requests.readthedocs.io/en/latest/)
 
 ### HTTP test case request
@@ -261,7 +261,7 @@ evaluate
 ## Example: HTTP API endpoint
 test an HTTP API endpoint
 
-## test cases
+### test cases
 
 unit test cases
 ```
@@ -302,7 +302,7 @@ unit test cases
 
 ```
 
-## unit test function
+### unit test function
 
 unit_tests.py
 ```
@@ -341,7 +341,7 @@ def _http_test(test_id, endpoint, **kwargs):
 
 ```
 
-## test results
+### test results
 
 ```
 {
@@ -365,3 +365,240 @@ def _http_test(test_id, endpoint, **kwargs):
    }
 } 
 ```
+
+## SQL query test 
+
+uses pandas [read_sql_query](https://pandas.pydata.org/docs/reference/api/pandas.read_sql_query.html) to execute SQL on a 
+client supplied connection object.
+
+
+### SQL query test case
+the test case is a JSON file that contains arguments to specify how to execute the SQL test case.
+
+test case
+```
+{
+  'test_type': str,                              required = sql
+  'query': str,                                  required                          either string query statement or file reference ex: '01_row_count.sql'
+  'connection': *,                               required                          either dictionary or file reference ex: 'redshift_connection.json'
+  'expected': dict,                              required                           see below
+  'params': dict,                                optional {}                       dictionary of parameters to substitute in the sql query 
+  'column_encoding': str,                        optional                          encoding if column names are bytes ex 'utf-8'
+  'param_sub_method': str,                       optional default = 'before_query' defines when parameter substitution occurs 'before_query' done by SQLTestCase and 'connection' parameters passed to the connection instance  
+  'connection_type': str,                        optional default = 'redshift'
+}
+```
+
+### SQL test case expected
+The expected argument defines how to evaluate the query results. It is organized into
+  expected criteria:   column, standard, operator  
+
+expected
+```
+{
+ <column>: {                                 required                            the column in the query results table to be evaluated ex: "row_count"
+				'standard': *                required                            reference value to compare against using the operator. data type must match value in the column ex: 0
+				'operator': str              required                            comparison operator such as = < != 
+			},
+}
+```
+
+## Example: SQL query row count on AWS Redshift database
+test whether the row count in two tables match. Uses AWS python library [redshift-connector](https://pypi.org/project/redshift-connector/) 
+to create a connection to a Redshift database.
+
+### SQL query
+In this example parameter substitution uses the python string substitution delimiters "{" and "}" for variable names "{SOURCE_SCHEMA}"
+
+01_row_count.sql
+```
+select
+  source_count as row_count,
+  target_count - source_count as failed
+from
+(select
+  (select
+    count(*)
+  from {SOURCE_SCHEMA}.{SOURCE_TABLE_NAME}) as source_count,
+  (select
+    count(*)
+  from {TARGET_SCHEMA}.{TARGET_TABLE_NAME}) as target_count
+) as t1
+;
+```
+
+### test cases
+
+unit test cases
+```
+{
+	"01_bsvisits_row_count": {
+		"test_type": "sql",
+		"connection_type": "redshift",
+		"connection": "redshift_connection.json",
+		"column_encoding": "utf-8",
+		"param_sub_method": "before_query",
+		"query": "01_row_count.sql",
+		"params": {
+			"SOURCE_SCHEMA": "cl_ci",
+			"SOURCE_TABLE_NAME":"bsvisits",
+			"TARGET_SCHEMA": "cl_ci_dev",
+			"TARGET_TABLE_NAME":"cl_rcode_bsvisits"
+			},
+		"expected": {
+			"row_count": {
+				"standard": 0,
+				"operator": ">"
+			},
+			"failed": {
+				"standard": 0,
+				"operator": "="
+			}
+		}
+	},
+	"02_calltxns_row_count": {
+		"test_type": "sql",
+		"connection_type": "redshift",
+		"connection": "redshift_connection.json",
+		"column_encoding": "utf-8",
+		"param_sub_method": "before_query",
+		"query": "01_row_count.sql",
+		"params": {
+			"SOURCE_SCHEMA": "cl_ci",
+			"SOURCE_TABLE_NAME":"cc_calltrans",
+			"TARGET_SCHEMA": "cl_ci_dev",
+			"TARGET_TABLE_NAME":"cl_rcode_calltransaction"
+			},
+		"expected": {
+			"row_count": {
+				"standard": 0,
+				"operator": ">"
+			},
+			"failed": {
+				"standard": 0,
+				"operator": "="
+			}
+		}
+	}
+}
+```
+
+
+### unit test function
+create a python file `unit_tests.py` with a function `create_test` that reads from config and uses the class `unittest_extensions.sql.SQLTestCase`
+The connection type used is the AWS Redshift python package `redshift_connector`. The custom method `get_connection` created the 
+database connection and passes it at construction to SQLTestCase
+
+unit_tests.py
+```
+import os
+import json
+import redshift_connector
+from unittest_extensions.sql import SQLTestCase
+
+
+CONNECTION_DEFAULT = 'redshift'
+CONNECTIONS = {
+    'redshift': {
+        'url': 'jdbc:redshift://{host}:{port}/{database}',
+        'url_params': ['host', 'port', 'database'],
+        'connect_params': ['host', 'port', 'database', 'user', 'password']
+    }
+}
+
+      
+def create_test(test_id, case_config, **kwargs):    
+    test_type = case_config['test_type']
+    if test_type == 'sql':
+        required_args = [
+            'query',
+            'expected',
+            'connection',
+        ]        
+        optional_args = {k: case_config[k] for k in case_config if not k in required_args}
+        test = _sql_test(
+            test_id,
+            case_config['query'],
+            case_config['expected'],
+            case_config['connection'],
+            **optional_args,
+            **kwargs
+        )
+     
+    return test
+
+
+def _sql_test(test_id, query, expected, connect_spec, 
+                connection_type=CONNECTION_DEFAULT, params={}, **kwargs):    
+    connect_config = read_path_or_dict(connect_spec)
+    conn = get_connection(connect_config, connection_type=connection_type)
+    test = SQLTestCase(
+        test_id,
+        query,
+        conn,
+        expected,
+        params=params,
+        **kwargs
+    )
+    return test
+    
+
+def get_connection(connect_params, connection_type=CONNECTION_DEFAULT):
+    conn = None
+    conn_args = {k: connect_params[k] for k in CONNECTIONS[connection_type]['connect_params']}
+    if connection_type == 'redshift':
+        conn = redshift_connector.connect(**conn_args)
+    return conn
+    
+
+def read_path_or_dict(reference) -> dict:
+    dict_value = reference
+    errors = ''
+    if not isinstance(dict_value, dict):
+        if isinstance(reference, str):
+            if os.path.exists(reference):
+                try:
+                    with open(reference, 'r') as f:
+                        dict_value = json.load(f)
+                        f.close()
+                except Exception as e:
+                    errors = f'ERROR. Error reading JSON file into dictionary. {str(e)}'
+    if not isinstance(dict_value, dict):
+        errors = f'ERROR. value: {dict_value} is not a python dictionary. {errors}'
+        dict_value = {}
+    
+    if errors:
+        raise ValueError(errors)
+
+    return dict_value
+
+```
+
+
+### test results
+
+```
+{
+   "test_ids": [
+      "01_bsvisits_row_count",
+      "02_calltxns_row_count"
+   ],
+   "statistics": {
+      "total": 2,
+      "passed": 0,
+      "failed": 2
+   },
+   "failed": {
+      "01_bsvisits_row_count": {
+         "success": false,
+         "errors": "-1144 != 0 : failed -1144 is not = 0"
+      },
+      "02_calltxns_row_count": {
+         "success": false,
+         "errors": "137 != 0 : failed 137 is not = 0"
+      }
+   },
+   "success": {}
+}
+```
+
