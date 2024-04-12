@@ -580,8 +580,8 @@ def read_path_or_dict(reference) -> dict:
 ```
 {
    "test_ids": [
-      "01_bsvisits_row_count",
-      "02_calltxns_row_count"
+      "01_currencies_row_count",
+      "02_account_details_row_count"
    ],
    "statistics": {
       "total": 2,
@@ -589,11 +589,11 @@ def read_path_or_dict(reference) -> dict:
       "failed": 2
    },
    "failed": {
-      "01_bsvisits_row_count": {
+      "01_currencies_row_count": {
          "success": false,
          "errors": "-1144 != 0 : failed -1144 is not = 0"
       },
-      "02_calltxns_row_count": {
+      "02_account_details_row_count": {
          "success": false,
          "errors": "137 != 0 : failed 137 is not = 0"
       }
