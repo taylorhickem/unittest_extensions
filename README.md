@@ -396,10 +396,10 @@ The expected argument defines how to evaluate the query results. It is organized
 expected
 ```
 {
- <column>: {                                 required                            the column in the query results table to be evaluated ex: "row_count"
-				'standard': *                required                            reference value to compare against using the operator. data type must match value in the column ex: 0
-				'operator': str              required                            comparison operator such as = < != 
-			},
+ <column>: {                      required      the column in the query results table to be evaluated ex: "row_count"
+				'standard': *,    required      reference value to compare against using the operator. data type must match value in the column ex: 0
+				'operator': str   required      comparison operator such as = < != 
+			}
 }
 ```
 
@@ -432,7 +432,7 @@ from
 unit test cases
 ```
 {
-	"01_bsvisits_row_count": {
+	"01_currencies_row_count": {
 		"test_type": "sql",
 		"connection_type": "redshift",
 		"connection": "redshift_connection.json",
@@ -440,10 +440,10 @@ unit test cases
 		"param_sub_method": "before_query",
 		"query": "01_row_count.sql",
 		"params": {
-			"SOURCE_SCHEMA": "cl_ci",
-			"SOURCE_TABLE_NAME":"bsvisits",
-			"TARGET_SCHEMA": "cl_ci_dev",
-			"TARGET_TABLE_NAME":"cl_rcode_bsvisits"
+			"SOURCE_SCHEMA": "finance",
+			"SOURCE_TABLE_NAME":"symbols",
+			"TARGET_SCHEMA": "finance",
+			"TARGET_TABLE_NAME":"currencies"
 			},
 		"expected": {
 			"row_count": {
@@ -456,7 +456,7 @@ unit test cases
 			}
 		}
 	},
-	"02_calltxns_row_count": {
+	"02_account_details_row_count": {
 		"test_type": "sql",
 		"connection_type": "redshift",
 		"connection": "redshift_connection.json",
@@ -464,10 +464,10 @@ unit test cases
 		"param_sub_method": "before_query",
 		"query": "01_row_count.sql",
 		"params": {
-			"SOURCE_SCHEMA": "cl_ci",
-			"SOURCE_TABLE_NAME":"cc_calltrans",
-			"TARGET_SCHEMA": "cl_ci_dev",
-			"TARGET_TABLE_NAME":"cl_rcode_calltransaction"
+			"SOURCE_SCHEMA": "finance",
+			"SOURCE_TABLE_NAME":"accounts",
+			"TARGET_SCHEMA": "finance",
+			"TARGET_TABLE_NAME":"account_details"
 			},
 		"expected": {
 			"row_count": {
