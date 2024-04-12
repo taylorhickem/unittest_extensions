@@ -1,4 +1,4 @@
-# unittests_extensions
+# unittest_extensions
 
 An extension to the python library unittest which organizes individual unit tests in a standard format and interface and 
 produces a standard unit test result artifact as a JSON file.  
